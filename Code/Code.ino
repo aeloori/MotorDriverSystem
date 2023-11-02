@@ -73,26 +73,6 @@ void getRPMData(){
   }
 }
 
-void getTimeData(){
-  while(rpmBtn!=HIGH)
-  {
-    rpmState=digitalRead(rpmE1);
-    if(rpmState!=rpmLastState){
-      if(digalRead(rpmE2!=rpmState)
-      {
-        rpmCounter+=10;
-        rpmDisplay.print(rpmCounter);
-      }
-      else
-      {
-        rpmCounter-=10;
-        rpmDisplay.print(rpmCounter);
-      }
-    }
-    rpmLastState=rpmState;
-  }
-}
-
 //running the motor for desired rpm and time
 
 void processStart(float rpm,float duration)
