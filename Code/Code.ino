@@ -7,19 +7,19 @@
 
 // motor breakout
 
-#define motorPin 6; // Enable pin
-#define directionPin 7; // Z/f for direction of motor spin
-#define speedPin 8; // VR for speed of the motor
+#define motorPin 6 // Enable pin
+#define directionPin 7 // Z/f for direction of motor spin
+#define speedPin 8 // VR for speed of the motor
 
 /* note : no need to connect signal pin to arduino as we are not using feedback from the motor to perfom the operation */
 
 // Rotary encoder Breakout
-#define rpmE1 9;
-#define rpmE2 10;
-#define rpmBtn 11;
+#define rpmE1 9
+#define rpmE2 10
+#define rpmBtn 11
 
 //start/Stop button
-#define opBtn 7;
+#define opBtn 7
 
 
 //Variables
@@ -58,7 +58,7 @@ void getRPMData(){
   {
     rpmState=digitalRead(rpmE1);
     if(rpmState!=rpmLastState){
-      if(digalRead(rpmE2!=rpmState)
+      if(digitalRead(rpmE2)!=rpmState)
       {
         rpmCounter+=10;
         rpmDisplay.print(rpmCounter);
@@ -90,9 +90,12 @@ void processStart(float rpm,float duration)
     delay(1000);
     timeCounter++;
     EEPROM.update(1,timeCounter/60); //storing time value into eeprom for power loss resque
-    EEPROM.update(0,rpm/10); // storing rpm value into eeprom for power loss resque
+    EEPROM.update(0,rpm*10+50); // storing rpm value into eeprom for power loss resque
   }
-  
+  digitalWrite(motorPin,LOW);
+  rpmDisplay.print("Comp");
+  timeDisplay.print("lete");
+  delay (2000);
 }
 
 //  --check the rpm and time saved in eeprom memory when the system gets shut down
