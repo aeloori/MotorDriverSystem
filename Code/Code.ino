@@ -1,116 +1,291 @@
-
-//importing libraries into code
-
+ //#include <TM1637.h>
+#include <TM1637Display.h>
 #include <EEPROM.h>
-#include <TM1637.h>
 
 
-// motor breakout
+#define encodera 2
+#define encoderb 3
+#define encoderSw 4
+boolean encoderFlag=false;
 
-#define motorPin 6 // Enable pin
-#define directionPin 7 // Z/f for direction of motor spin
-#define speedPin 8 // VR for speed of the motor
+//motorPins
+#define motorEn 7   //motor on off pin
+#define motorD 8    //motor direction pin
+#define motorSp 9   //motor speed pin
 
-/* note : no need to connect signal pin to arduino as we are not using feedback from the motor to perfom the operation */
+#define startBtn 10
 
-// Rotary encoder Breakout
-#define rpmE1 9
-#define rpmE2 10
-#define rpmBtn 11
+int displayCLK=5;
+int displayDIO=6;
 
-//start/Stop button
-#define opBtn 7
+int counter=50;
+int timeCount=0;
+int currentState;
+int lastState;
+String temp="";
+
+int btnLastState=0;
+boolean btnSw=false;
+
+TM1637Display screen(displayCLK, displayDIO);
+uint8_t data[] = { 0xff, 0xff, 0xff, 0xff };
+uint8_t blank[] = { 0x00, 0x00, 0x00, 0x00 };
+int segRPM[]={0,0,0,0};
+
+int segTime[]={0,0,0,0};
 
 
-//Variables
-int rpmCounter=0;
-int rpmState;
-int rpmLastState;
 
-//4 digits 7 segment display breakout
-TM1637 rpmDisplay(2,3);
-TM1637 timeDisplay(4,5);
 
 void setup()
 {
-  //setting up display modules
-  
-  rpmDisplay.begin(); //starting the display for rpm
-  rpmDisplay.setBrightness(4); //setting the display brightness to level 4
-  
-  timeDisplay.begin(); //starting the display for time
-  timeDisplay.setBrightness(4); //setting the display brightness to level 4
+  pinMode(encodera,INPUT);
+  pinMode(encoderb,INPUT);
+  pinMode(encoderSw,INPUT_PULLUP);
 
-  pinMode(rpmE1,INPUT);
-  pinMode(rpmE2,INPUT);
-  check(); // checking previous power cut
+  pinMode(motorEn,OUTPUT);
+  pinMode(motorSp,OUTPUT);
+  pinMode(motorD,OUTPUT);
+
+  pinMode(startBtn,INPUT_PULLUP);
+  Serial.begin(9600);                                                                                               
+  screen.setBrightness(4);
+
+  lastState=digitalRead(encodera);
+  btnLastState=digitalRead(encoderSw);
+  digitalWrite(motorD,HIGH);// always in same direction
+//  checkPrev();
 }
 
 void loop()
 {
-  getRPMData();
+  beginOP();
+  
 }
 
-// getting data from rotary encoder
-
-void getRPMData(){
-  while(rpmBtn!=HIGH)
+void checkPrev()
+{
+  if(EEPROM.read(0)!=0 && EEPROM.read(0)!=255 && EEPROM.read(1)!=0 && EEPROM.read(1)!=255)
   {
-    rpmState=digitalRead(rpmE1);
-    if(rpmState!=rpmLastState){
-      if(digitalRead(rpmE2)!=rpmState)
+    counter=EEPROM.read(0);
+    timeCount=readTime();
+    if(digitalRead(startBtn)==HIGH)
+    {
+      runOp();
+    }
+  }
+}
+
+void timeWrite()
+{
+  int temp=timeCount;
+  int i=1;
+  while(temp>0)
+  {
+    if(temp>255)
+    {
+      EEPROM.write(i,255);
+    }
+    else
+    {
+      EEPROM.write(i,temp);
+    }
+    temp-=255;
+    i++;
+  }
+}
+
+int readTime()
+{
+  int time=0;
+  for(int i=1;i<=40;i++)
+  {
+    time+=EEPROM.read(i);
+  }
+  return time;
+}
+
+void beginOP()
+{
+  currentState=digitalRead(encodera);
+  while(digitalRead(startBtn)==HIGH)
+  {
+    if(digitalRead(encoderSw)!=btnLastState)
+  {
+     Serial.println();
+     Serial.println("btnPressed");
+     if(encoderFlag==false)
+     {
+      encoderFlag=true;
+      Serial.println(encoderFlag);
+     }
+     else
+     {
+      encoderFlag=false;
+      Serial.println(encoderFlag);
+     }
+     delay(500);
+  }
+
+  if(currentState!=lastState && currentState==1)
+  {
+    if(encoderFlag==false)
+    {
+      if(digitalRead(encoderb)!=currentState && counter>=50 && counter<300)
       {
-        rpmCounter+=10;
-        rpmDisplay.print(rpmCounter);
+        counter+=10;
+        Serial.print("RPM set is : ");
+        Serial.println(counter);
+        show();
       }
-      else
+      else if(counter>50)
       {
-        rpmCounter-=10;
-        rpmDisplay.print(rpmCounter);
+        counter-=10;
+        Serial.print("RPM set is : ");
+        Serial.println(counter);
+        show();
       }
     }
-    rpmLastState=rpmState;
+    else
+    {
+      if(digitalRead(encoderb)!=currentState && counter>=0 && counter<=9999)
+      {
+        timeCount++;
+        Serial.print("time set is : ");
+        Serial.println(timeCount);
+        show();
+      }
+      else if(counter>0)
+      {
+        timeCount--;
+        Serial.print("time set is : ");
+        Serial.println(timeCount);
+        show();
+      }
+    }
+  }
+  lastState=currentState;
+  delay(1);
+  }
+  runOp();
+}
+
+void show()
+{
+  if(counter>0 && counter<10)
+  {
+    sep(true);
+    data[0] = screen.encodeDigit(0);
+    data[1] = screen.encodeDigit(0);
+    data[2] = screen.encodeDigit(0);
+    data[3] = screen.encodeDigit(segRPM[3]);
+    screen.setSegments(data);
+  }
+  else if(counter>9 && counter<100)
+  {
+    sep(true);
+    data[0] = screen.encodeDigit(0);
+    data[1] = screen.encodeDigit(0);
+    data[2] = screen.encodeDigit(segRPM[2]);
+    data[3] = screen.encodeDigit(segRPM[3]);
+    screen.setSegments(data);
+  }
+
+  else if(counter>99 && counter<1000)
+  {
+    sep(true);
+    data[0] = screen.encodeDigit(0);
+    data[1] = screen.encodeDigit(segRPM[1]);
+    data[2] = screen.encodeDigit(segRPM[2]);
+    data[3] = screen.encodeDigit(segRPM[3]);
+    screen.setSegments(data);
+  }
+
+  else if(counter>999 && counter<1000)
+  {
+    sep(true);
+    data[0] = screen.encodeDigit(segRPM[0]);
+    data[1] = screen.encodeDigit(segRPM[1]);
+    data[2] = screen.encodeDigit(segRPM[2]);
+    data[3] = screen.encodeDigit(segRPM[3]);
+    screen.setSegments(data);
+  }
+  else
+  {
+    screen.setSegments(blank);
   }
 }
 
-//running the motor for desired rpm and time
+void sep(boolean flag)
+  {
+     if(flag==true)
+     {
+        int temp=counter;
+        int i=3;
+        if(counter>9)
+        {
+          while(temp>0)
+          {
+            segRPM[i]=temp%10;
+            temp/=10;
+            i--;
+          }
+        } 
+        else if(counter>=0 && counter<10)
+        {
+          segRPM[3]=counter;
+        }
+     }
+//     else
+//     {
+//        int temp=counter;
+//        int i=3;
+//        if(counter>9)
+//        {
+//          while(temp>0)
+//          {
+//            segTime[i]=temp%10;
+//            temp/=10;
+//            i--;
+//          }
+//        } 
+//        else if(counter>=0 && counter<10)
+//        {
+//          segTime[3]=counter;
+//        }
+//     }
+  }
 
-void processStart(float rpm,float duration)
-{
-  //ADD Speed using rpm
-  rpmDisplay.print(rpm);
-  timeDisplay.print(duration);
-  float timeCounter=0;
-
-  digitalWrite(motorPin,HIGH);
-
-  //ADD start button or stop
-  while(timeCounter<=duration*60)
+void runOp()
+{ 
+//  counter=speedValue();
+  digitalWrite(motorEn,HIGH);
+  digitalWrite(motorSp,counter);
+  EEPROM.write(0,counter);
+  long timeSec=timeCount*60;
+  while(timeSec>0)
   {
     delay(1000);
-    timeCounter++;
-    EEPROM.update(1,timeCounter/60); //storing time value into eeprom for power loss resque
-    EEPROM.update(0,rpm*10+50); // storing rpm value into eeprom for power loss resque
+    timeSec--;
+    if(timeSec%60==0)
+    {
+      timeCount--;
+      timeWrite();
+    }
+    timeSec--;
   }
-  digitalWrite(motorPin,LOW);
-  rpmDisplay.print("Comp");
-  timeDisplay.print("lete");
-  delay (2000);
+  digitalWrite(motorEn,LOW);
+  digitalWrite(motorSp,0);
+  Serial.println("Process has ended");
 }
 
-//  --check the rpm and time saved in eeprom memory when the system gets shut down
-
-void check()
+int speedValue()
 {
-  float savedRPM=EEPROM.read(0); // rpm memory location
-  float savedTime=EEPROM.read(1); //time memory location
-  if(savedRPM!= 255  && savedTime!=255 ||  savedRPM!=0 &&  savedTime!=0)
-  {
-      processStart(savedRPM,savedTime); // sending rpm and time parameters to begin the process
-  }
-  else()
-  {
-    EEPROM.write(0,0);
-    EEPROM.write(1,0);
-  }
+    float speedDec=counter*.85;
+    Serial.print("before Convertion : ");
+    Serial.println(speedDec);
+    Serial.println();
+    Serial.print("After Converstion : ");
+    Serial.println(static_cast<int>(floor(speedDec)));
+    return static_cast<int>(floor(speedDec));
 }
